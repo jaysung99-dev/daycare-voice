@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>日照語音紀錄 Demo</title><style>
+body{font-family:sans-serif;margin:0;background:#f4f7f6;color:#222}header{background:#2e7d6b;color:#fff;padding:12px 16px;font-size:20px}
+main{padding:12px;max-width:760px;margin:auto}.card{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px #0002}
+button{font-size:17px;padding:10px 16px;border:0;border-radius:8px;margin:4px;background:#2e7d6b;color:#fff}button.rec{background:#c62828}
+textarea{width:100%;min-height:80px;font-size:16px;box-sizing:border-box}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}
+input{font-size:16px;width:95%}.bad{background:#ffe0e0}.warn{color:#c62828;font-size:14px}.ok{color:#2e7d6b}li{margin:4px 0}
+</style></head><body><header>🎙️ 日照中心 語音每日紀錄（Demo）</header><main>
+<div class="card"><b>1. 說話或打字</b><br><small>例：王美玉今天體溫36.8，血壓130/80，午餐吃了一半，十點有吃藥，下午有參加手工課，如廁一次需要協助，沒有跌倒。</small>
+<textarea id="txt"></textarea><button id="mic">🎤 開始錄音</button><button onclick="parse()">🧠 解析填表</button></div>
+<div class="card"><b>2. 確認表單（紅色＝需確認）</b><div id="form"></div><button onclick="save()">✅ 確認存檔</button> <span id="msg"></span></div>
+<div class="card"><b>3. 今日待辦提醒</b><ul id="todo"></ul></div>
+<div class="card"><b>4. 已存紀錄</b><table id="log"><tr><th>時間</th><th>個案</th><th>體溫</th><th>血壓</th><th>飲食</th><th>服藥</th><th>意外</th></tr></table></div>
+</main><script>
+const CASES=["王美玉","林阿土","陳秀英","張金水"];
+const PERIODIC=[["陳秀英","六個月複評",3],["全體","本季個案討論會",12],["全體","本月團體活動紀錄",5],["林阿土","照顧計畫（評估後7工作天）",2]];
+const FIELDS=[["case","個案"],["temp","體溫(°C)"],["bp","血壓"],["meal","飲食"],["med","服藥"],["toilet","如廁"],["act","活動參與"],["incident","跌倒/意外"],["note","其他備註"]];
+let rec=null,cur={},saved={};
+const S=window.SpeechRecognition||window.webkitSpeechRecognition;
+document.getElementById('mic').onclick=function(){if(!S){alert('此瀏覽器不支援語音，請用 Chrome 或直接打字');return}
+ if(rec){rec.stop();return}rec=new S();rec.lang='zh-TW';rec.continuous=true;rec.interimResults=false;
+ rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)txt.value+=e.results[i][0].transcript+'，'};
+ rec.onend=()=>{rec=null;this.textContent='🎤 開始錄音';this.classList.remove('rec')};rec.start();this.textContent='⏹ 停止';this.classList.add('rec')};
+function grab(t,re){const m=t.match(re);return m?m[1].trim():''}
+function parse(){const t=txt.value.replace(/度|點/g,m=>m=='點'?'.':'');cur={};
+ cur.case=CASES.find(c=>t.includes(c))||'';
+ cur.temp=grab(t,/體溫[^0-9]*([0-9]{2}(?:\.[0-9])?)/);
+ cur.bp=grab(t,/血壓[^0-9]*([0-9]{2,3}\s*[\/對]\s*[0-9]{2,3})/).replace('對','/');
+ cur.meal=grab(txt.value,/((?:早餐|午餐|晚餐|點心)[^，。,]*)/);
+ cur.med=/(吃藥|服藥|給藥)/.test(txt.value)?grab(txt.value,/([^，。,]*(?:吃藥|服藥|給藥)[^，。,]*)/):'';
+ cur.toilet=grab(txt.value,/((?:如廁|上廁所|大便|小便)[^，。,]*)/);
+ cur.act=grab(txt.value,/((?:參加|活動|課)[^，。,]*)/);
+ cur.incident=/沒有跌倒|無跌倒|沒跌倒/.test(txt.value)?'無':grab(txt.value,/((?:跌倒|嗆|受傷|撞)[^，。,]*)/);
+ cur.note='';render()}
+function check(k,v){if(['case','temp','meal','med','incident'].includes(k)&&!v)return'必填，沒聽到';
+ if(k=='case'&&!CASES.includes(v))return'名單中找不到此個案';
+ if(k=='temp'&&(v<34||v>42))return'數值不合理，請再確認';
+ if(k=='temp'&&v>=37.5)return'⚠ 發燒，請通報護理人員';
+ if(k=='bp'&&v){const[a,b]=v.split('/').map(Number);if(a>250||a<70||b>150||b<40)return'血壓不合理';if(a>=160)return'⚠ 血壓偏高'}
+ if(k=='incident'&&v&&v!='無')return'⚠ 有意外事件，需另填意外事件紀錄表';return''}
+function render(){let h='<table>';FIELDS.forEach(([k,l])=>{const w=check(k,cur[k]||'');
+ h+=`<tr class="${w&&!w.startsWith('⚠')?'bad':''}"><td>${l}</td><td><input value="${cur[k]||''}" oninput="cur['${k}']=this.value;"><div class="warn">${w}</div></td></tr>`});form.innerHTML=h+'</table>'}
+function save(){let errs=FIELDS.filter(([k])=>{const w=check(k,cur[k]||'');return w&&!w.startsWith('⚠')});
+ if(errs.length){msg.innerHTML='<span class="warn">還有 '+errs.length+' 項需確認</span>';render();return}
+ saved[cur.case]=cur;const r=log.insertRow();[new Date().toLocaleTimeString(),cur.case,cur.temp,cur.bp,cur.meal,cur.med,cur.incident].forEach(x=>r.insertCell().textContent=x||'-');
+ msg.innerHTML='<span class="ok">已存檔</span>';cur={};txt.value='';form.innerHTML='';todo_()}
+function todo_(){let h='';CASES.forEach(c=>{if(!saved[c])h+=`<li>❗ ${c}：今日紀錄（含體溫）尚未完成</li>`});
+ PERIODIC.forEach(([w,x,d])=>h+=`<li>${d<=3?'🔴':'🟡'} ${w}：${x}，剩 ${d} 天</li>`);
+ h+='<li>📋 服務紀錄須於 48 小時內登錄照顧服務管理平台</li>';todo.innerHTML=h}
+todo_();
+</script></body></html>
