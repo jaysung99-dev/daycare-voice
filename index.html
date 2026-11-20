@@ -3,49 +3,163 @@
 body{font-family:sans-serif;margin:0;background:#f4f7f6;color:#222}header{background:#2e7d6b;color:#fff;padding:12px 16px;font-size:20px}
 main{padding:12px;max-width:760px;margin:auto}.card{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px #0002}
 button{font-size:17px;padding:10px 16px;border:0;border-radius:8px;margin:4px;background:#2e7d6b;color:#fff}button.rec{background:#c62828}
-textarea{width:100%;min-height:80px;font-size:16px;box-sizing:border-box}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}
-input{font-size:16px;width:95%}.bad{background:#ffe0e0}.warn{color:#c62828;font-size:14px}.ok{color:#2e7d6b}li{margin:4px 0}
-</style></head><body><header>🎙️ 日照中心 語音每日紀錄（Demo）</header><main>
-<div class="card"><b>1. 說話或打字</b><br><small>例：王美玉今天體溫36.8，血壓130/80，午餐吃了一半，十點有吃藥，下午有參加手工課，如廁一次需要協助，沒有跌倒。</small>
-<textarea id="txt"></textarea><button id="mic">🎤 開始錄音</button><button onclick="parse()">🧠 解析填表</button></div>
-<div class="card"><b>2. 確認表單（紅色＝需確認）</b><div id="form"></div><button onclick="save()">✅ 確認存檔</button> <span id="msg"></span></div>
+button.mini{font-size:18px;padding:6px 10px;margin:0 0 0 6px;background:#5a8f83;flex:none}button.mini.rec{background:#c62828}button.gray{background:#888}
+textarea{width:100%;min-height:80px;font-size:16px;box-sizing:border-box}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+td.lbl{width:28%;white-space:nowrap;padding-top:12px}.row{display:flex;align-items:center}.row input,.row select{flex:1;min-width:0;font-size:16px;padding:4px}
+.bad{background:#ffe0e0}.warn{color:#c62828;font-size:14px}.ok{color:#2e7d6b}li{margin:4px 0}
+.hint{color:#555;font-size:13px;margin:4px 0}.interim{color:#888;font-size:15px;min-height:1.2em}.status{font-size:14px;color:#2e7d6b;min-height:1.2em}
+</style></head><body><header>🎙️ 日照中心 語音每日紀錄（Demo v2）</header><main>
+<div class="card"><b>1. 整段說話或打字</b><br><small>例：王美玉今天體溫三十六度八，血壓一百三十、八十，中餐吃半碗，十點藥有吃，下午有去唱歌，尿尿兩次需要協助，沒有跌倒。</small>
+<div class="hint">小技巧：一項一項講，每項之間停一下；講不清楚的項目，可在第 2 區那一格旁按 🎤 單獨補講。</div>
+<textarea id="txt"></textarea><div id="interim" class="interim"></div><div id="status" class="status"></div>
+<button id="mic">🎤 開始錄音</button><button onclick="parse()">🧠 解析填表</button><button class="gray" onclick="clearAll()">清除</button></div>
+<div class="card"><b>2. 確認表單（紅色＝需確認；每格可按 🎤 單獨補講）</b><div id="form"></div><button onclick="save()">✅ 確認存檔</button> <span id="msg"></span></div>
 <div class="card"><b>3. 今日待辦提醒</b><ul id="todo"></ul></div>
 <div class="card"><b>4. 已存紀錄</b><table id="log"><tr><th>時間</th><th>個案</th><th>體溫</th><th>血壓</th><th>飲食</th><th>服藥</th><th>意外</th></tr></table></div>
 </main><script>
 const CASES=["王美玉","林阿土","陳秀英","張金水"];
 const PERIODIC=[["陳秀英","六個月複評",3],["全體","本季個案討論會",12],["全體","本月團體活動紀錄",5],["林阿土","照顧計畫（評估後7工作天）",2]];
 const FIELDS=[["case","個案"],["temp","體溫(°C)"],["bp","血壓"],["meal","飲食"],["med","服藥"],["toilet","如廁"],["act","活動參與"],["incident","跌倒/意外"],["note","其他備註"]];
-let rec=null,cur={},saved={};
-const S=window.SpeechRecognition||window.webkitSpeechRecognition;
-document.getElementById('mic').onclick=function(){if(!S){alert('此瀏覽器不支援語音，請用 Chrome 或直接打字');return}
- if(rec){rec.stop();return}rec=new S();rec.lang='zh-TW';rec.continuous=true;rec.interimResults=false;
- rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)txt.value+=e.results[i][0].transcript+'，'};
- rec.onend=()=>{rec=null;this.textContent='🎤 開始錄音';this.classList.remove('rec')};rec.start();this.textContent='⏹ 停止';this.classList.add('rec')};
-function grab(t,re){const m=t.match(re);return m?m[1].trim():''}
-function parse(){const t=txt.value.replace(/度|點/g,m=>m=='點'?'.':'');cur={};
- cur.case=CASES.find(c=>t.includes(c))||'';
- cur.temp=grab(t,/體溫[^0-9]*([0-9]{2}(?:\.[0-9])?)/);
- cur.bp=grab(t,/血壓[^0-9]*([0-9]{2,3}\s*[\/對]\s*[0-9]{2,3})/).replace('對','/');
- cur.meal=grab(txt.value,/((?:早餐|午餐|晚餐|點心)[^，。,]*)/);
- cur.med=/(吃藥|服藥|給藥)/.test(txt.value)?grab(txt.value,/([^，。,]*(?:吃藥|服藥|給藥)[^，。,]*)/):'';
- cur.toilet=grab(txt.value,/((?:如廁|上廁所|大便|小便)[^，。,]*)/);
- cur.act=grab(txt.value,/((?:參加|活動|課)[^，。,]*)/);
- cur.incident=/沒有跌倒|無跌倒|沒跌倒/.test(txt.value)?'無':grab(txt.value,/((?:跌倒|嗆|受傷|撞)[^，。,]*)/);
- cur.note='';render()}
+const $=id=>document.getElementById(id);
+let cur={},fz={},showWarn=false,saved={};
+
+/* ---------- 文字正規化：簡轉繁、全形、中文數字 ---------- */
+const S2T_PAIRS="体體温溫压壓药藥厕廁没沒点點课課参參协協饭飯陈陳张張伤傷呛嗆无無换換两兩时時后後动動发發烧燒缩縮个個给給头頭晕暈气氣说說觉覺记記录錄运運门門诊診医醫护護这這们們过過乐樂么麼间間还還报報吗嗎钟鐘脚腳顿頓泻瀉肿腫剂劑针針测測复復习習画畫戏戲讲講话話听聽读讀写寫团團级級视視检檢转轉帮幫厅廳边邊坠墜状狀况況绪緒稳穩应應该該鸡雞鱼魚汤湯饮飲进進净淨几幾仅僅尽盡处處车車来來买買东東问問题題亲親属屬联聯络絡疗療识識认認练練节節数數计計乱亂闹鬧顺順惯慣扫掃尝嘗摄攝压壓";
+const S2T={};for(let i=0;i<S2T_PAIRS.length;i+=2)S2T[S2T_PAIRS[i]]=S2T_PAIRS[i+1];
+const toTrad=s=>s.replace(/[一-鿿]/g,c=>S2T[c]||c);
+const CN={'零':0,'〇':0,'一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+const isD=c=>c!==undefined&&CN[c]!==undefined;
+function parseRun(m){
+  const parts=m.split('點'),ip=parts[0],dp=parts[1],out=[];let i=0;
+  while(i<ip.length){let v=0,got=false;
+    if(isD(ip[i])&&ip[i+1]==='百'){v+=CN[ip[i]]*100;i+=2;got=true;
+      if(ip[i]==='零'||ip[i]==='〇'){i++;if(isD(ip[i])&&ip[i+1]!=='十'){v+=CN[ip[i]];i++;out.push(v);continue}}
+      else if(isD(ip[i])&&(i+1>=ip.length||isD(ip[i+1]))){v+=CN[ip[i]]*10;i++;out.push(v);continue}} // 一百二＝120
+    if(isD(ip[i])&&ip[i+1]==='十'){v+=CN[ip[i]]*10;i+=2;got=true}
+    else if(ip[i]==='十'){v+=10;i++;got=true}
+    if(isD(ip[i])&&ip[i+1]!=='十'&&ip[i+1]!=='百'){v+=CN[ip[i]];i++;got=true}
+    if(!got){i++;continue}
+    out.push(v)}
+  if(dp!==undefined&&out.length)out[out.length-1]=out[out.length-1]+'.'+[...dp].map(c=>CN[c]).join('');
+  return out}
+function cnNums(s){return s.replace(/[零〇一二兩三四五六七八九十百]+(?:點[零〇一二三四五六七八九]+)?/g,m=>{
+  if(!/[十百]/.test(m)&&!/點[零〇一二三四五六七八九]/.test(m))return m; // 一半、兩次 不轉
+  const n=parseRun(m);return n.length?n.join(' '):m})}
+function norm(t){
+  t=toTrad(t||'');
+  t=t.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)).replace(/．/g,'.').replace(/／/g,'/');
+  t=cnNums(t);
+  t=t.replace(/(\d{2})\s*度\s*([0-9零〇一二三四五六七八九])/g,(m,a,b)=>a+'.'+(isD(b)?CN[b]:b)); // 36度8
+  t=t.replace(/(\d)\s*點\s*(\d)(?!\d)/g,'$1.$2'); // 36點8
+  return t}
+
+/* ---------- 欄位關鍵詞（不靠標點切段） ---------- */
+const PRE='(?:(?:早上|上午|中午|下午|傍晚|晚上)?(?:[\\d一二兩三四五六七八九十]{1,3}點半?)?)';
+const NEG='(?:都沒有|並沒有|沒有|沒|無|未|不)';
+const INC='(?:跌倒|摔倒|摔跤|跌跤|滑倒|嗆到|嗆咳|噎到|受傷|撞到|瘀青|破皮|意外)';
+const ANCH={
+  temp:'(?:量體溫|體溫|溫度|額溫|耳溫|發燒|燒到)',
+  bp:'(?:量血壓|血壓|收縮壓)',
+  meal:PRE+'(?:早餐|午餐|中餐|晚餐|點心|早飯|午飯|中飯|晚飯|吃飯|用餐|進食|食量|胃口|吃了?[半一兩三幾\\d]*碗)',
+  med:PRE+'(?:有|已經|已|都有|沒有|沒)?(?:吃藥|服藥|給藥|用藥|吃過藥|藥有吃|藥吃了|藥物|藥)',
+  toilet:PRE+'(?:有|沒有)?(?:如廁|上廁所|去廁所|廁所|大便|小便|排便|排尿|尿尿|尿布|解便|便便)',
+  act:PRE+'(?:有|沒有|沒)?(?:去)?(?:參加|參與|活動|課程|上課|手工|唱歌|運動|復健|體操|桌遊|團體|做操)',
+  incident:'(?:(?:早上|上午|中午|下午|傍晚|晚上)?(?:吃飯|吃東西|喝水|走路|上廁所|洗澡|起身|坐下)?(?:的時候|時)?)'+NEG+'?'+INC,
+  safe:'(?:一切平安|很平安|平安|沒事|一切正常)'};
+const KEYWORDS=new RegExp(Object.values(ANCH).join('|'),'g');
+function clean(s){s=(s||'').trim();
+  s=s.replace(/^(?:然後|還有|另外|而且|接著|再來|也|，|,)+/,'');
+  let p;do{p=s;s=s.replace(/(?:今天|然後|還有|另外|而且|那個|就是|接著|再來|早上|上午|中午|下午|傍晚|晚上|有|去|在|也|都|的|，|,|\s)$/,'')}while(s!==p&&s.length>2);
+  return s.trim()}
+function findCase(t){
+  for(const c of CASES)if(t.includes(c))return{v:c,fuzzy:false};
+  for(const c of CASES)if(t.includes(c.slice(1)))return{v:c,fuzzy:true};
+  let best='',bs=1;for(const c of CASES)for(let i=0;i+3<=t.length;i++){let s=0;for(let j=0;j<3;j++)if(t[i+j]===c[j])s++;if(s>bs){bs=s;best=c}}
+  return{v:best,fuzzy:!!best}}
+function bpFrom(s){const m=(s||'').match(/(\d{2,3})\D{0,6}?(\d{2,3})/);return m?m[1]+'/'+m[2]:''}
+function incidentFrom(s,safe){if(!s)return safe?'無':'';if(new RegExp(NEG+INC).test(s))return'無';return s}
+
+function parse(){
+  const t=norm($('txt').value);$('txt').value=t;cur={};fz={};
+  const r=findCase(t);cur.case=r.v;fz.case=r.fuzzy;
+  const first={},marks=[];for(const k in ANCH){const re=new RegExp(ANCH[k],'g');let m;
+    while((m=re.exec(t))){if(!m[0].length){re.lastIndex++;continue}marks.push([k,m.index]);if(first[k]===undefined)first[k]=m.index}}
+  const seg=k=>{if(first[k]===undefined)return'';const s0=first[k];
+    const nx=marks.filter(([f,s])=>f!==k&&s>s0).map(x=>x[1]).sort((a,b)=>a-b)[0];
+    return clean(t.slice(s0,nx===undefined?t.length:nx).split(/[，。,、；;！!？?\n]/)[0])};
+  let m=seg('temp').match(/(\d{2}(?:\.\d)?)/)||t.match(/((?:3[4-9]|4[0-2])(?:\.\d)?)\s*度/);cur.temp=m?m[1]:'';
+  cur.bp=bpFrom(seg('bp'))||((m=t.match(/(\d{2,3})\s*[\/對比]\s*(\d{2,3})/))?m[1]+'/'+m[2]:'');
+  cur.meal=seg('meal');cur.med=seg('med');cur.toilet=seg('toilet');cur.act=seg('act');
+  cur.incident=incidentFrom(seg('incident'),first.safe!==undefined);cur.note='';
+  showWarn=true;render();status('已解析，請確認紅色欄位')}
+
+function fillField(k,raw){const t=norm(raw);let v;
+  if(k==='case'){const r=findCase(t);v=r.v;fz.case=r.fuzzy}
+  else if(k==='temp'){const m=t.match(/(\d{2}(?:\.\d)?)/);v=m?m[1]:''}
+  else if(k==='bp'){v=bpFrom(t)}
+  else if(k==='incident'){v=/^(?:都沒有|沒有|沒|無|沒事|平安|正常|一切正常)/.test(t)?'無':clean(t)}
+  else v=clean(t);
+  cur[k]=v;showWarn=true;render();status('「'+lbl(k)+'」已補上：'+(v||'（沒聽懂，請再講一次或直接打字）'))}
+
+/* ---------- 檢查與畫面 ---------- */
+const lbl=k=>FIELDS.find(f=>f[0]===k)[1];
 function check(k,v){if(['case','temp','meal','med','incident'].includes(k)&&!v)return'必填，沒聽到';
- if(k=='case'&&!CASES.includes(v))return'名單中找不到此個案';
- if(k=='temp'&&(v<34||v>42))return'數值不合理，請再確認';
- if(k=='temp'&&v>=37.5)return'⚠ 發燒，請通報護理人員';
- if(k=='bp'&&v){const[a,b]=v.split('/').map(Number);if(a>250||a<70||b>150||b<40)return'血壓不合理';if(a>=160)return'⚠ 血壓偏高'}
- if(k=='incident'&&v&&v!='無')return'⚠ 有意外事件，需另填意外事件紀錄表';return''}
-function render(){let h='<table>';FIELDS.forEach(([k,l])=>{const w=check(k,cur[k]||'');
- h+=`<tr class="${w&&!w.startsWith('⚠')?'bad':''}"><td>${l}</td><td><input value="${cur[k]||''}" oninput="cur['${k}']=this.value;"><div class="warn">${w}</div></td></tr>`});form.innerHTML=h+'</table>'}
-function save(){let errs=FIELDS.filter(([k])=>{const w=check(k,cur[k]||'');return w&&!w.startsWith('⚠')});
- if(errs.length){msg.innerHTML='<span class="warn">還有 '+errs.length+' 項需確認</span>';render();return}
- saved[cur.case]=cur;const r=log.insertRow();[new Date().toLocaleTimeString(),cur.case,cur.temp,cur.bp,cur.meal,cur.med,cur.incident].forEach(x=>r.insertCell().textContent=x||'-');
- msg.innerHTML='<span class="ok">已存檔</span>';cur={};txt.value='';form.innerHTML='';todo_()}
+  if(k==='case'&&!CASES.includes(v))return'名單中找不到此個案';
+  if(k==='case'&&fz.case)return'⚠ 依讀音推測為此個案，請確認';
+  if(k==='temp'&&(isNaN(v)||v<34||v>42))return'數值不合理，請再確認';
+  if(k==='temp'&&v>=37.5)return'⚠ 發燒，請通報護理人員';
+  if(k==='bp'&&v){const[a,b]=v.split('/').map(Number);if(!b||a>250||a<70||b>150||b<40)return'血壓不合理';if(a>=160)return'⚠ 血壓偏高'}
+  if(k==='incident'&&v&&v!=='無')return'⚠ 有意外事件，需另填意外事件紀錄表';return''}
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function render(){let h='<table>';FIELDS.forEach(([k,l])=>{const v=cur[k]||'',w=showWarn?check(k,v):'';
+  const ctl=k==='case'
+    ?`<select onchange="cur.case=this.value;fz.case=false"><option value="">（請選擇）</option>${CASES.map(c=>`<option${c===v?' selected':''}>${c}</option>`).join('')}</select>`
+    :`<input value="${esc(v)}" oninput="cur['${k}']=this.value">`;
+  h+=`<tr class="${w&&!w.startsWith('⚠')?'bad':''}"><td class="lbl">${l}</td><td><div class="row">${ctl}<button class="mini" data-label="🎤" onclick="toggle('${k}',this)">🎤</button></div><div class="warn">${w}</div></td></tr>`});
+  $('form').innerHTML=h+'</table>'}
+function status(s){$('status').textContent=s}
+function clearAll(){cur={};fz={};showWarn=false;$('txt').value='';$('msg').innerHTML='';status('');render()}
+function save(){showWarn=true;const errs=FIELDS.filter(([k])=>{const w=check(k,cur[k]||'');return w&&!w.startsWith('⚠')});
+  if(errs.length){$('msg').innerHTML='<span class="warn">還有 '+errs.length+' 項需確認</span>';render();return}
+  saved[cur.case]=cur;const r=$('log').insertRow();[new Date().toLocaleTimeString(),cur.case,cur.temp,cur.bp,cur.meal,cur.med,cur.incident].forEach(x=>r.insertCell().textContent=x||'-');
+  cur={};fz={};showWarn=false;$('txt').value='';render();todo_();$('msg').innerHTML='<span class="ok">已存檔</span>';status('')}
 function todo_(){let h='';CASES.forEach(c=>{if(!saved[c])h+=`<li>❗ ${c}：今日紀錄（含體溫）尚未完成</li>`});
- PERIODIC.forEach(([w,x,d])=>h+=`<li>${d<=3?'🔴':'🟡'} ${w}：${x}，剩 ${d} 天</li>`);
- h+='<li>📋 服務紀錄須於 48 小時內登錄照顧服務管理平台</li>';todo.innerHTML=h}
-todo_();
+  PERIODIC.forEach(([w,x,d])=>h+=`<li>${d<=3?'🔴':'🟡'} ${w}：${x}，剩 ${d} 天</li>`);
+  h+='<li>📋 服務紀錄須於 48 小時內登錄照顧服務管理平台</li>';$('todo').innerHTML=h}
+
+/* ---------- 語音：即時字幕、自動續錄、逐項錄音 ---------- */
+const S=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,keep=false,activeBtn=null,quiet=0;
+function pickAlt(r){let best=r[0].transcript,bs=-1;
+  for(let i=0;i<r.length;i++){const t=norm(r[i].transcript);let s=(CASES.some(c=>t.includes(c))?2:0)+(t.match(KEYWORDS)||[]).length;if(s>bs){bs=s;best=r[i].transcript}}
+  return best}
+function toggle(k,btn){
+  if(!S){status('此瀏覽器不支援語音辨識，請改用 Chrome，或直接打字');return}
+  if(activeBtn){if(activeBtn===btn){keep=false;try{rec&&rec.stop()}catch(e){}}else status('請先按 ⏹ 結束目前的錄音');return}
+  begin(k,btn)}
+function begin(k,btn){
+  activeBtn=btn;keep=(k===null);quiet=0;let buf='';
+  btn.textContent=k===null?'⏹ 停止':'⏹';btn.classList.add('rec');
+  status(k===null?'錄音中…可以分段講，講完按「⏹ 停止」':'請說「'+lbl(k)+'」');
+  const finish=()=>{rec=null;keep=false;activeBtn=null;$('interim').textContent='';
+    btn.textContent=k===null?'🎤 開始錄音':'🎤';btn.classList.remove('rec');
+    if(k===null){if($('txt').value.trim()){parse();status('錄音結束，已自動解析，請確認')}}
+    else if(buf)fillField(k,buf);else status('沒聽到內容，請再按一次 🎤')};
+  const go=()=>{rec=new S();rec.lang='zh-TW';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=3;
+    rec.onresult=e=>{let interim='';
+      for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
+        if(r.isFinal){quiet=0;const best=pickAlt(r);
+          if(k===null){const tx=$('txt');tx.value+=(tx.value&&!/[，。,\s]$/.test(tx.value)?'，':'')+norm(best)}else buf+=best}
+        else interim+=r[0].transcript}
+      $('interim').textContent=interim?'聽到：'+toTrad(interim):''};
+    rec.onerror=ev=>{const er=ev.error;
+      if(er==='not-allowed'||er==='service-not-allowed'){keep=false;status('⚠ 麥克風被封鎖：請點網址列左側圖示 → 權限 → 麥克風改為「允許」，再重新整理')}
+      else if(er==='network'){keep=false;status('⚠ 網路不穩，語音辨識需要連網')}
+      else if(er==='audio-capture'){keep=false;status('⚠ 找不到麥克風')}
+      else if(er==='no-speech'){quiet++;if(quiet>=3){keep=false;status('一段時間沒聽到聲音，已自動停止')}else status('沒聽到聲音，請靠近手機再說')}};
+    rec.onend=()=>{rec=null;if(keep){try{go()}catch(e){finish()}}else finish()};
+    rec.start()};
+  try{go()}catch(e){finish();status('無法啟動錄音：'+e.message)}}
+$('mic').onclick=function(){toggle(null,this)};
+render();todo_();
 </script></body></html>
